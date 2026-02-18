@@ -57,12 +57,13 @@ jobs:
           elif [[ -f "${repo_root}/go.mod" ]]; then
             module_dir="${repo_root}"
           else
-            found_mod="$(find "${repo_root}" -name go.mod -not -path '*/.git/*' | head -n1 || true)"
+            cd "${repo_root}"
+            found_mod="$(git ls-files '**/go.mod' | head -n1 || true)"
             if [[ -z "${found_mod}" ]]; then
               echo "No go.mod found. Set PROJECT_DIR to the Go module root."
               exit 1
             fi
-            module_dir="$(dirname "${found_mod}")"
+            module_dir="${repo_root}/$(dirname "${found_mod}")"
           fi
 
           echo "Testing in module dir: ${module_dir}"
@@ -82,21 +83,27 @@ jobs:
           build_target="${MAIN_PACKAGE}"
           dist_dir="${GITHUB_WORKSPACE}/dist"
 
+          cd "${repo_root}"
+
           if [[ -f "${repo_root}/${PROJECT_DIR}/go.mod" ]]; then
             module_dir="${repo_root}/${PROJECT_DIR}"
           elif [[ -f "${repo_root}/go.mod" ]]; then
             module_dir="${repo_root}"
           else
-            found_mod="$(find "${repo_root}" -name go.mod -not -path '*/.git/*' | head -n1 || true)"
+            found_mod="$(git ls-files '**/go.mod' | head -n1 || true)"
             if [[ -z "${found_mod}" ]]; then
               echo "No go.mod found. Set PROJECT_DIR to the Go module root."
               exit 1
             fi
-            module_dir="$(dirname "${found_mod}")"
+            module_dir="${repo_root}/$(dirname "${found_mod}")"
           fi
 
           cd "${module_dir}"
           mkdir -p "${dist_dir}"
+          module_rel="${module_dir#${repo_root}/}"
+          if [[ "${module_rel}" == "${module_dir}" ]]; then
+            module_rel="."
+          fi
 
           if [[ "${build_target}" == ./* && ! -e "${build_target#./}" ]]; then
             echo "Configured MAIN_PACKAGE (${build_target}) not found in module dir. Auto-detecting..."
@@ -104,7 +111,19 @@ jobs:
           fi
 
           if [[ -z "${build_target}" ]]; then
-            build_target="$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./cmd/... 2>/dev/null | sed '/^$/d' | head -n1 || true)"
+            main_file="$(git -C "${repo_root}" ls-files 'cmd/**/main.go' | while read -r file; do grep -q '^package main$' "${repo_root}/${file}" && echo "${file}" && break; done || true)"
+            if [[ -n "${main_file}" ]]; then
+              main_dir="${main_file%/main.go}"
+              if [[ "${module_rel}" != "." ]]; then
+                case "${main_dir}" in
+                  "${module_rel}/"*) main_dir="${main_dir#${module_rel}/}" ;;
+                  *) main_dir="" ;;
+                esac
+              fi
+              if [[ -n "${main_dir}" ]]; then
+                build_target="./${main_dir}"
+              fi
+            fi
           fi
           if [[ -z "${build_target}" ]]; then
             build_target="$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./... 2>/dev/null | sed '/^$/d' | head -n1 || true)"
@@ -113,6 +132,8 @@ jobs:
             echo "No main package found from ${module_dir}. Set MAIN_PACKAGE in workflow env."
             echo "go list ./... output:"
             go list ./... || true
+            echo "Tracked cmd files:"
+            git -C "${repo_root}" ls-files 'cmd/**' || true
             exit 1
           fi
 
