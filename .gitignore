@@ -14,7 +14,7 @@ dist/
 *.dll
 *.so
 *.dylib
-devtools
+/devtools
 
 # Go caches and local tooling output
 .gocache/
