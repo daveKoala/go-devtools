@@ -15,6 +15,7 @@ permissions:
 env:
   BINARY_NAME: devtools
   MAIN_PACKAGE: ./cmd/devtools
+  PROJECT_DIR: .
 
 jobs:
   build:
@@ -43,29 +44,72 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: "1.22.x"
 
       - name: Test
         run: |
           mkdir -p .gocache
+          project_dir="${PROJECT_DIR}"
+          if [[ ! -f "${project_dir}/go.mod" ]]; then
+            found_mod="$(find . -name go.mod -not -path '*/.git/*' | head -n1 || true)"
+            if [[ -z "${found_mod}" ]]; then
+              echo "No go.mod found. Set PROJECT_DIR to the Go module root."
+              exit 1
+            fi
+            project_dir="$(dirname "${found_mod}")"
+          fi
+
+          echo "Testing in: ${project_dir}"
+          cd "${project_dir}"
           GOCACHE="$PWD/.gocache" go test ./...
 
       - name: Build archive
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist
 
           asset_name="${BINARY_NAME}_${{ matrix.goos }}_${{ matrix.goarch }}"
           bin_name="${BINARY_NAME}"
+          project_dir="${PROJECT_DIR}"
           main_pkg="${MAIN_PACKAGE}"
+          dist_dir="${GITHUB_WORKSPACE}/dist"
 
-          # Fallback for repos where the main package path differs.
-          if [[ ! -e "${main_pkg#./}" ]]; then
-            echo "Configured MAIN_PACKAGE (${main_pkg}) not found. Auto-detecting..."
+          if [[ ! -f "${project_dir}/go.mod" ]]; then
+            found_mod="$(find . -name go.mod -not -path '*/.git/*' | head -n1 || true)"
+            if [[ -z "${found_mod}" ]]; then
+              echo "No go.mod found. Set PROJECT_DIR to the Go module root."
+              exit 1
+            fi
+            project_dir="$(dirname "${found_mod}")"
+          fi
+
+          # If configured package path is relative and doesn't exist, try to detect module root from that path.
+          if [[ "${main_pkg}" == ./* && ! -e "${project_dir}/${main_pkg#./}" ]]; then
+            found_main_path="$(find . -type d -path "*/${main_pkg#./}" -not -path '*/.git/*' | head -n1 || true)"
+            if [[ -n "${found_main_path}" ]]; then
+              project_dir="${found_main_path%/${main_pkg#./}}"
+              project_dir="${project_dir#./}"
+              if [[ -z "${project_dir}" ]]; then
+                project_dir="."
+              fi
+            fi
+          fi
+
+          cd "${project_dir}"
+          mkdir -p "${dist_dir}"
+
+          # Fallback for repos where MAIN_PACKAGE differs.
+          if [[ "${main_pkg}" == ./* && ! -e "${main_pkg#./}" ]]; then
+            echo "Configured MAIN_PACKAGE (${main_pkg}) not found in ${project_dir}. Auto-detecting..."
             main_pkg="$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./cmd/... 2>/dev/null | sed '/^$/d' | head -n1 || true)"
             if [[ -z "${main_pkg}" ]]; then
-              main_pkg="$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./... | sed '/^$/d' | head -n1 || true)"
+              main_pkg="$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./... 2>/dev/null | sed '/^$/d' | head -n1 || true)"
+            fi
+            if [[ -z "${main_pkg}" ]]; then
+              main_file="$(grep -Rsl --include='*.go' '^package main$' . | head -n1 || true)"
+              if [[ -n "${main_file}" ]]; then
+                main_pkg="./$(dirname "${main_file}")"
+              fi
             fi
             if [[ -z "${main_pkg}" ]]; then
               echo "No main package found. Set MAIN_PACKAGE in workflow env."
@@ -73,14 +117,22 @@ jobs:
             fi
           fi
 
+          echo "Building in: ${project_dir}"
           echo "Building package: ${main_pkg}"
 
           GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" CGO_ENABLED=0 \
-            go build -trimpath -ldflags="-s -w" -o "dist/${bin_name}" "${main_pkg}"
+            go build -trimpath -ldflags="-s -w" -o "${dist_dir}/${bin_name}" "${main_pkg}"
 
-          cp README.md dist/README.md
+          if [[ -f README.md ]]; then
+            cp README.md "${dist_dir}/README.md"
+          elif [[ -f "${GITHUB_WORKSPACE}/README.md" ]]; then
+            cp "${GITHUB_WORKSPACE}/README.md" "${dist_dir}/README.md"
+          else
+            echo "No README.md found at module root or parent."
+            touch "${dist_dir}/README.md"
+          fi
 
-          tar -czf "dist/${asset_name}.tar.gz" -C dist "${bin_name}" README.md
+          tar -czf "${dist_dir}/${asset_name}.tar.gz" -C "${dist_dir}" "${bin_name}" README.md
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
