@@ -1,0 +1,34 @@
+# macOS / OS noise
+.DS_Store
+
+# IDE / editor settings
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go build artifacts and binaries
+bin/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+devtools
+
+# Go caches and local tooling output
+.gocache/
+.gomodcache/
+.cache/
+
+# Test / coverage output
+*.test
+*.out
+coverage.out
+
+# Environment files
+.env
+.env.*
+
+# Logs
+*.log
