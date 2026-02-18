@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"go-devtools/internal/cli"
 	"go-devtools/internal/menu"
 	"go-devtools/internal/modules"
 	"go-devtools/internal/modules/authtoken"
@@ -25,7 +26,12 @@ func main() {
 	items := modules.ToMenuItems(toolModules)
 	items = append(items, menu.QuitItem("Exit"))
 	root := menu.New("Developer Tools CLI", items)
-	if err := menu.Run(root); err != nil {
+
+	runTUI := func() error {
+		return menu.Run(root)
+	}
+
+	if err := cli.Run(os.Args[1:], os.Stdout, os.Stderr, toolModules, runTUI); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}

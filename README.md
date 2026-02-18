@@ -18,6 +18,24 @@ This project is a scaffold for a terminal developer-tools CLI in Go.
 go run ./cmd/devtools
 ```
 
+## CLI + TUI modes
+
+- No args: launches the interactive TUI.
+- `help`: prints command help and module/action details.
+- `list`: lists modules and runnable actions.
+- `run`: executes an action non-interactively.
+
+Examples:
+
+```bash
+go run ./cmd/devtools help
+go run ./cmd/devtools list
+go run ./cmd/devtools run chuck-norris-facts random-fact
+go run ./cmd/devtools run auth-token-generator userpass-token --username alice --password secret
+go run ./cmd/devtools help auth-token-generator google-token
+go run ./cmd/devtools tui
+```
+
 ## GitHub build artifacts and releases
 
 This repo includes a GitHub Actions workflow at `.github/workflows/build-release.yml`.
@@ -46,11 +64,13 @@ type Tool interface {
     Description() string
     Menu() *menu.Menu
     Requirements() []requirements.Check
+    Actions() []modules.Action
 }
 ```
 
 - `Requirements()` runs before entering that module.
 - `Menu()` can return deeply nested menus using `menu.NewBuilder(...)`.
+- `Actions()` powers command-mode execution (`devtools run ...`) and help output.
 
 ## Common menu pattern
 
@@ -81,4 +101,3 @@ Use shared exit helpers in any menu:
 - `Chuck Norris Fact` (calls `https://api.chucknorris.io/jokes/random`)
 - `Auth Token Generator` (`Username + Password` and `Google` flows)
 - `Cloud CLI Checks` (`AWS CLI` / `Azure CLI` checks with install actions)
-# go-devtools

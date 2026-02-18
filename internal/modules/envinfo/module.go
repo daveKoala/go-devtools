@@ -29,21 +29,48 @@ func (Tool) Requirements() []requirements.Check {
 	}
 }
 
+func (Tool) Actions() []modules.Action {
+	return []modules.Action{
+		{
+			ID:          "go-runtime",
+			Label:       "Show Go runtime info",
+			Description: "Print local Go runtime metadata",
+			Usage:       "devtools run env-info go-runtime",
+			Run:         showGoRuntime,
+		},
+		{
+			ID:          "path-entries",
+			Label:       "Show PATH entries",
+			Description: "Print each PATH entry on its own line",
+			Usage:       "devtools run env-info path-entries",
+			Run:         showPathEntries,
+		},
+	}
+}
+
 func (Tool) Menu() *menu.Menu {
 	paths := menu.NewBuilder("Environment Info / PATH").
 		Action("Show PATH entries", "Displays PATH split into lines", func() (string, error) {
-			path := os.Getenv("PATH")
-			entries := strings.Split(path, ":")
-			return strings.Join(entries, "\n"), nil
+			return showPathEntries(modules.ActionContext{})
 		}).
 		WithBack().
 		Build()
 
 	return menu.NewBuilder("Environment Info Tool").
 		Action("Show Go runtime info", "Prints local runtime metadata", func() (string, error) {
-			return fmt.Sprintf("GOOS=%s GOARCH=%s GOVERSION=%s", runtime.GOOS, runtime.GOARCH, runtime.Version()), nil
+			return showGoRuntime(modules.ActionContext{})
 		}).
 		SubMenu("PATH details", "Nested submenu example", paths).
 		WithBack().
 		Build()
+}
+
+func showGoRuntime(_ modules.ActionContext) (string, error) {
+	return fmt.Sprintf("GOOS=%s GOARCH=%s GOVERSION=%s", runtime.GOOS, runtime.GOARCH, runtime.Version()), nil
+}
+
+func showPathEntries(_ modules.ActionContext) (string, error) {
+	path := os.Getenv("PATH")
+	entries := strings.Split(path, ":")
+	return strings.Join(entries, "\n"), nil
 }

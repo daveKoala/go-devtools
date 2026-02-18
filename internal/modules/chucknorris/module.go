@@ -25,9 +25,23 @@ func (Tool) Description() string { return "Fetch a random fact from api.chucknor
 
 func (Tool) Requirements() []requirements.Check { return nil }
 
+func (Tool) Actions() []modules.Action {
+	return []modules.Action{
+		{
+			ID:          "random-fact",
+			Label:       "Get random fact",
+			Description: "Calls GET https://api.chucknorris.io/jokes/random",
+			Usage:       "devtools run chuck-norris-facts random-fact",
+			Run:         fetchFactAction,
+		},
+	}
+}
+
 func (Tool) Menu() *menu.Menu {
 	return menu.NewBuilder("Chuck Norris Fact Tool").
-		Action("Get random fact", "Calls GET https://api.chucknorris.io/jokes/random", fetchFact).
+		Action("Get random fact", "Calls GET https://api.chucknorris.io/jokes/random", func() (string, error) {
+			return fetchFactAction(modules.ActionContext{})
+		}).
 		WithBack().
 		Build()
 }
@@ -38,7 +52,7 @@ type jokeResponse struct {
 	Value string `json:"value"`
 }
 
-func fetchFact() (string, error) {
+func fetchFactAction(_ modules.ActionContext) (string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get("https://api.chucknorris.io/jokes/random")
 	if err != nil {
