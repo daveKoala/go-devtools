@@ -24,6 +24,7 @@ This repo includes a GitHub Actions workflow at `.github/workflows/build-release
 
 - On every pull request and push to `main`, it builds Linux/macOS binaries and uploads them as workflow artifacts.
 - On tags like `v1.0.0`, it also publishes those archives as GitHub Release assets.
+- The build target is controlled by `MAIN_PACKAGE` (default: `./cmd/devtools`).
 
 ### Release steps
 

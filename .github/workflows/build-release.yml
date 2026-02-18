@@ -14,6 +14,7 @@ permissions:
 
 env:
   BINARY_NAME: devtools
+  MAIN_PACKAGE: ./cmd/devtools
 
 jobs:
   build:
@@ -57,9 +58,25 @@ jobs:
 
           asset_name="${BINARY_NAME}_${{ matrix.goos }}_${{ matrix.goarch }}"
           bin_name="${BINARY_NAME}"
+          main_pkg="${MAIN_PACKAGE}"
+
+          # Fallback for repos where the main package path differs.
+          if [[ ! -e "${main_pkg#./}" ]]; then
+            echo "Configured MAIN_PACKAGE (${main_pkg}) not found. Auto-detecting..."
+            main_pkg="$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./cmd/... 2>/dev/null | sed '/^$/d' | head -n1 || true)"
+            if [[ -z "${main_pkg}" ]]; then
+              main_pkg="$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./... | sed '/^$/d' | head -n1 || true)"
+            fi
+            if [[ -z "${main_pkg}" ]]; then
+              echo "No main package found. Set MAIN_PACKAGE in workflow env."
+              exit 1
+            fi
+          fi
+
+          echo "Building package: ${main_pkg}"
 
           GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" CGO_ENABLED=0 \
-            go build -trimpath -ldflags="-s -w" -o "dist/${bin_name}" ./cmd/devtools
+            go build -trimpath -ldflags="-s -w" -o "dist/${bin_name}" "${main_pkg}"
 
           cp README.md dist/README.md
 
